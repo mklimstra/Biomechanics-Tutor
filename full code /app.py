@@ -649,6 +649,8 @@ def server(input, output, session):
                             ui.nav_menu(
                                 "Choose Topic",
                                 *[ui.nav_panel(section, value=section) for section in sections],
+                                
+                                # Remove align="right" as it's not a valid parameter
                             ),
                             id="section_nav",
                             title=ui.div(
@@ -663,7 +665,10 @@ def server(input, output, session):
                 # **Add Section Indicator for Debugging**
                 ui.output_ui("question_nav"),
                 ui.output_ui("question_card"),
+                ui.output_ui("solution_card"),  # <-- ADDED: separate solution card
                 ui.output_ui("main_content"),
+                # **Add Feedback Display Below Main Content**
+
             )
 
     # **Existing Section Navigation Logic**
@@ -762,20 +767,7 @@ def server(input, output, session):
                 )
             )
 
-        if show_solution() and pd.notna(main_row["solution"]):
-            top_content.append(
-                ui.div(
-                    ui.h3("Solution", class_="question-title"),
-                    ui.tags.div(
-                        "",
-                        class_="solution-markdown-content",
-                        id="solution-content",
-                        **{"data-markdown": main_row["solution"]}
-                    ),
-                    style="margin-top: 15px;"
-                )
-            )
-            await session.send_custom_message('render-math', {'selector': '#solution-content'})
+        # (REMOVED inline solution block here to avoid showing inside question card)
 
         units_options = [
             "Select units", "m/s", "m/s^2", "rad/s","rad/s^2", "N",
@@ -814,6 +806,43 @@ def server(input, output, session):
             ui.div(bottom_content, style="padding-bottom: 10px;"), 
             style="margin-bottom: 10px;"
         )
+
+    # ---------- NEW SEPARATE SOLUTION CARD ----------
+    @output
+    @render.ui
+    async def solution_card():
+        if not show_solution():
+            return None
+
+        q_data = df[
+            (df["section"] == current_section())
+            & (df["main_question"] == current_question())
+        ]
+        if q_data.empty or pd.isna(q_data.iloc[0]["solution"]):
+            return None
+
+        row = q_data.iloc[0]
+
+        # --- Clean up and markdownify the solution text ---
+        solution_text = str(row["solution"]).replace("---", "<hr>")  # visual breaks
+        solution_text = solution_text.replace("\n", "  \n")  # Markdown line breaks
+
+        await session.send_custom_message('render-math', {'selector': '#solution-content'})
+
+        return ui.card(
+            ui.div(
+                ui.h3("Solution", class_="question-title"),
+                ui.tags.div(
+                    "",
+                    class_="solution-markdown-content",
+                    id="solution-content",
+                    **{"data-markdown": solution_text},
+                ),
+                style="margin-top: 15px;"
+            ),
+            style="margin-bottom: 10px;"
+        )
+
 
     @output
     @render.ui

@@ -589,6 +589,55 @@ app_ui = ui.page_fluid(
             color: #333;
             text-align: center;
         }
+
+        /* ---------- MOBILE RESPONSIVE FIXES (minimal, appended) ---------- */
+
+        /* 1) Fix numeric + unit alignment on small screens */
+        @media (max-width: 768px) {
+          .answer-content .row {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 8px !important;
+            margin: 0 !important;
+          }
+          .answer-content .col-4,
+          .answer-content .col-3,
+          .answer-content .col-5 {
+            flex: 1 1 100% !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            margin: 2px 0 !important;
+          }
+          .answer-content .form-control,
+          .answer-content .selectize-control {
+            width: 100% !important;
+          }
+        }
+
+        /* 2) Fix landing page section buttons on phones */
+        @media (max-width: 600px) {
+          .section-buttons-container {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 90% !important;
+            max-width: none !important;
+            margin: 0 auto !important;
+            gap: 12px !important;
+          }
+          .section-button {
+            width: 100% !important;
+            font-size: 16px !important;
+            padding: 12px 10px !important;
+          }
+          .landing-container {
+            height: auto !important;
+            padding: 20px 0 !important;
+          }
+        }
         """
     ),
 )
@@ -649,8 +698,6 @@ def server(input, output, session):
                             ui.nav_menu(
                                 "Choose Topic",
                                 *[ui.nav_panel(section, value=section) for section in sections],
-                                
-                                # Remove align="right" as it's not a valid parameter
                             ),
                             id="section_nav",
                             title=ui.div(
@@ -665,10 +712,8 @@ def server(input, output, session):
                 # **Add Section Indicator for Debugging**
                 ui.output_ui("question_nav"),
                 ui.output_ui("question_card"),
-                ui.output_ui("solution_card"),  # <-- ADDED: separate solution card
                 ui.output_ui("main_content"),
-                # **Add Feedback Display Below Main Content**
-
+                ui.output_ui("solution_card"),   # <-- separate solution card (minimal addition)
             )
 
     # **Existing Section Navigation Logic**
@@ -767,7 +812,7 @@ def server(input, output, session):
                 )
             )
 
-        # (REMOVED inline solution block here to avoid showing inside question card)
+        # (Solution content moved to separate solution_card; leave this untouched)
 
         units_options = [
             "Select units", "m/s", "m/s^2", "rad/s","rad/s^2", "N",
@@ -806,43 +851,6 @@ def server(input, output, session):
             ui.div(bottom_content, style="padding-bottom: 10px;"), 
             style="margin-bottom: 10px;"
         )
-
-    # ---------- NEW SEPARATE SOLUTION CARD ----------
-    @output
-    @render.ui
-    async def solution_card():
-        if not show_solution():
-            return None
-
-        q_data = df[
-            (df["section"] == current_section())
-            & (df["main_question"] == current_question())
-        ]
-        if q_data.empty or pd.isna(q_data.iloc[0]["solution"]):
-            return None
-
-        row = q_data.iloc[0]
-
-        # --- Clean up and markdownify the solution text ---
-        solution_text = str(row["solution"]).replace("---", "<hr>")  # visual breaks
-        solution_text = solution_text.replace("\n", "  \n")  # Markdown line breaks
-
-        await session.send_custom_message('render-math', {'selector': '#solution-content'})
-
-        return ui.card(
-            ui.div(
-                ui.h3("Solution", class_="question-title"),
-                ui.tags.div(
-                    "",
-                    class_="solution-markdown-content",
-                    id="solution-content",
-                    **{"data-markdown": solution_text},
-                ),
-                style="margin-top: 15px;"
-            ),
-            style="margin-bottom: 10px;"
-        )
-
 
     @output
     @render.ui
@@ -956,6 +964,43 @@ def server(input, output, session):
                 selected=f"Step {current_subq() + 1}",
             ),
             class_="question_steps"
+        )
+
+    # === NEW: Separate solution card (appears only when show_solution() is True) ===
+    @output
+    @render.ui
+    async def solution_card():
+        if not show_solution():
+            return None
+
+        q_data = df[
+            (df["section"] == current_section())
+            & (df["main_question"] == current_question())
+        ]
+        if q_data.empty or pd.isna(q_data.iloc[0]["solution"]):
+            return None
+
+        row = q_data.iloc[0]
+
+        # Light-touch cleanup for nicer Markdown structure; does not alter styling rules
+        solution_text = str(row["solution"]).replace("---", "<hr>")
+        solution_text = solution_text.replace("\n", "  \n")
+
+        # Trigger markdown + math render for solution block
+        await session.send_custom_message('render-math', {'selector': '#solution-content'})
+
+        return ui.card(
+            ui.div(
+                ui.h3("Solution", class_="question-title"),
+                ui.tags.div(
+                    "",
+                    class_="solution-markdown-content",
+                    id="solution-content",
+                    **{"data-markdown": solution_text},
+                ),
+                style="margin-top: 15px;"
+            ),
+            style="margin-bottom: 10px;"
         )
 
     @output

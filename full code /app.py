@@ -3,7 +3,7 @@ import pandas as pd
 import random
 from pathlib import Path
 from starlette.staticfiles import StaticFiles
-import asyncio  # <-- minimal functional change (for first-load delay)
+import asyncio  # minimal functional addition for first-load delay
 
 # Helper function to sanitize section names for button IDs
 def sanitize_id(name):
@@ -43,8 +43,6 @@ landing_page_ui = ui.page_fluid(
         ui.p("Please select a section to begin:", class_="welcome-subtitle"),
         # **Dynamic Section Buttons**
         ui.div(
-
-            
             [
                 ui.input_action_button(
                     f"section_button_{sanitize_id(section)}",
@@ -94,6 +92,7 @@ app_ui = ui.page_fluid(
             src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"
         ),
         ui.tags.script(
+            # Minimal functional change: second pass ensures markdown-only (no KaTeX) renders
             """
             function renderContent(selector) {
                 setTimeout(function() {
@@ -121,6 +120,8 @@ app_ui = ui.page_fluid(
             }
             Shiny.addCustomMessageHandler('render-math', function(message) {
                 renderContent(message.selector);
+                // extra pass for non-math questions
+                setTimeout(function(){ renderContent(message.selector); }, 150);
             });
             """
         ),
@@ -648,8 +649,6 @@ def server(input, output, session):
                             ui.nav_menu(
                                 "Choose Topic",
                                 *[ui.nav_panel(section, value=section) for section in sections],
-                                
-                                # Remove align="right" as it's not a valid parameter
                             ),
                             id="section_nav",
                             title=ui.div(
@@ -665,8 +664,6 @@ def server(input, output, session):
                 ui.output_ui("question_nav"),
                 ui.output_ui("question_card"),
                 ui.output_ui("main_content"),
-                # **Add Feedback Display Below Main Content**
-
             )
 
     # **Existing Section Navigation Logic**
@@ -684,7 +681,7 @@ def server(input, output, session):
             if not unique_questions.empty:
                 current_question.set(unique_questions.iloc[0]["main_question"])
 
-        # Only collapse if not the first load
+        # Only collapse if not the first load (navbar toggle)
         if not initial_load():
             await session.send_custom_message("collapse-navbar", {})
         else:
@@ -756,20 +753,14 @@ def server(input, output, session):
             ),
         ]
 
-        # if pd.notna(main_row["image_url"]):
-        #     top_content.append(
-        #         ui.tags.img(
-        #             src=main_row["image_url"],
-        #             style="max-width: 100%; height: auto; margin: 10px -15px;",
-        #         )
-        #     )
+        # Use the CSV path as-is (absolute or relative)
         if pd.notna(main_row["image_url"]):
             top_content.append(
                 ui.tags.img(
-            src=main_row["image_url"],  # <-- minimal fix (works with absolute or relative)
-            style="max-width: 100%; height: auto; margin: 10px -15px;",
+                    src=main_row["image_url"],
+                    style="max-width: 100%; height: auto; margin: 10px -15px;",
+                )
             )
-        )
 
         if show_solution() and pd.notna(main_row["solution"]):
             top_content.append(
@@ -812,7 +803,7 @@ def server(input, output, session):
             class_="answer-content"
         )
 
-        # --- minimal functional change: ensure DOM exists on first load before rendering ---
+        # Minimal functional change: ensure DOM exists on first load before rendering markdown
         if initial_load():
             await asyncio.sleep(0.15)
             initial_load.set(False)
@@ -845,7 +836,7 @@ def server(input, output, session):
                 options = []
                 for j in range(4):
                     option_text = sq_data.iloc[0][f"option_{j+1}"]
-                    # ---- minimal fix: skip NaN/blank/none options so last step shows no cards ----
+                    # Minimal functional fix: skip NaN/blank/none options so last step shows no cards
                     if pd.isna(option_text) or str(option_text).strip().lower() in ("", "nan", "none"):
                         continue
 
@@ -874,7 +865,6 @@ def server(input, output, session):
                 random.shuffle(options)
                 current_order.set(options)
 
-                # Build sub-question content; only show option cards if any valid options exist
                 subq_content = [
                     ui.div(
                         "",

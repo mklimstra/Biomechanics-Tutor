@@ -1,5 +1,0 @@
-pandas
-shinywidgets
-matplotlib
-numpy
-
